@@ -26,7 +26,7 @@ func (s *SubscribeService) GetSubscribeById(ctx context.Context, id string) (dom
 	return s.subscribeRepository.GetById(ctx, id)
 }
 
-func (s *SubscribeService) UpdateSubscribe(ctx context.Context, subscribe domain.Subscribe) error {
+func (s *SubscribeService) UpdateSubscribe(ctx context.Context, subscribe domain.Subscribe) (string, error) {
 	return s.subscribeRepository.Update(ctx, subscribe)
 }
 
