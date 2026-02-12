@@ -22,12 +22,12 @@ func (r *PostgresqlSubscribeRepository) Create(ctx context.Context, subscribe do
 		return "", err
 	}
 	query := `
-		INSERT INTO subscribe (telegram_id, city, filters)
+		INSERT INTO subscribe (token, city, filters)
 		VALUES ($1, $2, $3)
 		RETURNING id
 	`
 	var id string
-	err = r.db.QueryRowContext(ctx, query, subscribe.TelegramID, subscribe.City, filters).Scan(&id)
+	err = r.db.QueryRowContext(ctx, query, subscribe.Token, subscribe.City, filters).Scan(&id)
 	if err != nil {
 		return "", err
 	}
@@ -95,4 +95,19 @@ func (r *PostgresqlSubscribeRepository) Delete(ctx context.Context, id string) e
 		return err
 	}
 	return nil
+}
+
+func (r *PostgresqlSubscribeRepository) SetTelegramID(ctx context.Context, id string, telegramID string) (string, error) {
+	query := `
+		UPDATE subscribe
+		SET telegram_id = $1
+		WHERE id = $2
+		RETURNING telegram_id
+	`
+	var resultTelegramID string
+	err := r.db.QueryRowContext(ctx, query, telegramID, id).Scan(&resultTelegramID)
+	if err != nil {
+		return "", err
+	}
+	return resultTelegramID, nil
 }

@@ -70,11 +70,12 @@ func main() {
 	healthMux.HandleFunc("/health/readiness", healthHandler.ReadinessProbe)
 
 	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("/api/v1/create", subscribeHandlers.CreateSubscribe)
-	apiMux.HandleFunc("/api/v1/get-all", subscribeHandlers.GetAllSubscribes)
-	apiMux.HandleFunc("/api/v1/get-by-id", subscribeHandlers.GetSubscribeById)
-	apiMux.HandleFunc("/api/v1/update", subscribeHandlers.UpdateSubscribe)
-	apiMux.HandleFunc("/api/v1/delete", subscribeHandlers.DeleteSubscribe)
+	apiMux.HandleFunc("/api/v1/subscribe-create", subscribeHandlers.CreateSubscribe)
+	apiMux.HandleFunc("/api/v1/subscribe-get-all", subscribeHandlers.GetAllSubscribes)
+	apiMux.HandleFunc("/api/v1/subscribe-get-by-id", subscribeHandlers.GetSubscribeById)
+	apiMux.HandleFunc("/api/v1/subscribe-update", subscribeHandlers.UpdateSubscribe)
+	apiMux.HandleFunc("/api/v1/subscribe-delete", subscribeHandlers.DeleteSubscribe)
+	apiMux.HandleFunc("/api/v1/set-telegram-id", subscribeHandlers.SetTelegramID)
 	handlerMiddleware := middleware.MiddlewareChain(apiMux, middleware.TraceMiddleware, middleware.CorsMiddleware)
 
 	mainMux := http.NewServeMux()

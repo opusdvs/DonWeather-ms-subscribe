@@ -33,3 +33,7 @@ func (s *SubscribeService) UpdateSubscribe(ctx context.Context, subscribe domain
 func (s *SubscribeService) DeleteSubscribe(ctx context.Context, id string) error {
 	return s.subscribeRepository.Delete(ctx, id)
 }
+
+func (s *SubscribeService) SetTelegramID(ctx context.Context, token string, telegramID string) (string, error) {
+	return s.subscribeRepository.SetTelegramID(ctx, token, telegramID)
+}

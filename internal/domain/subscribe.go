@@ -3,6 +3,7 @@ package domain
 type Subscribe struct {
 	ID         string  `json:"id"`
 	TelegramID int64   `json:"telegram_id"`
+	Token      string  `json:"token"`
 	City       string  `json:"city"`
 	Filters    Filters `json:"filters"`
 }

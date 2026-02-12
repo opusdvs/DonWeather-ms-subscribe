@@ -8,4 +8,5 @@ type SubscribeDelivery interface {
 	GetSubscribeById(w http.ResponseWriter, r *http.Request)
 	UpdateSubscribe(w http.ResponseWriter, r *http.Request)
 	DeleteSubscribe(w http.ResponseWriter, r *http.Request)
+	SetTelegramID(w http.ResponseWriter, r *http.Request)
 }
