@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 
 	"github.com/opusdvs/DonWeather-ms-subscribe/internal/domain"
 )
@@ -16,98 +15,11 @@ func NewPostgresqlSubscribeRepository(db *sql.DB) *PostgresqlSubscribeRepository
 	return &PostgresqlSubscribeRepository{db: db}
 }
 
-func (r *PostgresqlSubscribeRepository) Create(ctx context.Context, subscribe domain.Subscribe) (string, error) {
-	filters, err := json.Marshal(subscribe.Filters)
-	if err != nil {
-		return "", err
-	}
+func (r *PostgresqlSubscribeRepository) Save(ctx context.Context, sub domain.Subscribe) error {
 	query := `
-		INSERT INTO subscribe (token, city, filters)
-		VALUES ($1, $2, $3)
+		INSERT INTO subscribe (token, telegram_id, city, filters)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id
 	`
-	var id string
-	err = r.db.QueryRowContext(ctx, query, subscribe.Token, subscribe.City, filters).Scan(&id)
-	if err != nil {
-		return "", err
-	}
-	return id, nil
-}
-
-func (r *PostgresqlSubscribeRepository) GetAll(ctx context.Context) ([]domain.Subscribe, error) {
-	query := `
-		SELECT id, telegram_id, city, filters
-		FROM subscribe
-	`
-	var subscribes []domain.Subscribe
-	rows, err := r.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var subscribe domain.Subscribe
-		err = rows.Scan(&subscribe.ID, &subscribe.TelegramID, &subscribe.City, &subscribe.Filters)
-		if err != nil {
-			return nil, err
-		}
-		subscribes = append(subscribes, subscribe)
-	}
-	return subscribes, nil
-}
-
-func (r *PostgresqlSubscribeRepository) GetById(ctx context.Context, id string) (domain.Subscribe, error) {
-	query := `
-		SELECT id, telegram_id, city, filters
-		FROM subscribe
-		WHERE id = $1
-	`
-	var subscribe domain.Subscribe
-	err := r.db.QueryRowContext(ctx, query, id).Scan(&subscribe.ID, &subscribe.TelegramID, &subscribe.City, &subscribe.Filters)
-	if err != nil {
-		return domain.Subscribe{}, err
-	}
-	return subscribe, nil
-}
-
-func (r *PostgresqlSubscribeRepository) Update(ctx context.Context, subscribe domain.Subscribe) (string, error) {
-	query := `
-		UPDATE subscribe
-		SET telegram_id = $1, city = $2, filters = $3
-		WHERE id = $4
-		RETURNING id
-	`
-	var id string
-	err := r.db.QueryRowContext(ctx, query, subscribe.TelegramID, subscribe.City, subscribe.Filters, subscribe.ID).Scan(&id)
-	if err != nil {
-		return "", err
-	}
-	return subscribe.ID, nil
-}
-
-func (r *PostgresqlSubscribeRepository) Delete(ctx context.Context, id string) error {
-	query := `
-		DELETE FROM subscribe
-		WHERE id = $1
-	`
-	_, err := r.db.ExecContext(ctx, query, id)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (r *PostgresqlSubscribeRepository) SetTelegramID(ctx context.Context, id string, telegramID string) (string, error) {
-	query := `
-		UPDATE subscribe
-		SET telegram_id = $1
-		WHERE id = $2
-		RETURNING telegram_id
-	`
-	var resultTelegramID string
-	err := r.db.QueryRowContext(ctx, query, telegramID, id).Scan(&resultTelegramID)
-	if err != nil {
-		return "", err
-	}
-	return resultTelegramID, nil
+	return r.db.QueryRowContext(ctx, query, sub.Token, sub.TelegramID, sub.City, sub.Filters).Scan(&sub.ID)
 }

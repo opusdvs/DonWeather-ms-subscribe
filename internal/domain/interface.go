@@ -2,11 +2,12 @@ package domain
 
 import "context"
 
+type PendengSubscribeRepository interface {
+	Save(ctx context.Context, sub PendingSubscribe) error
+	Get(ctx context.Context, token string) (PendingSubscribe, error)
+	Delete(ctx context.Context, token string) error
+}
+
 type SubscribeRepository interface {
-	Create(ctx context.Context, subscribe Subscribe) (string, error)
-	GetAll(ctx context.Context) ([]Subscribe, error)
-	GetById(ctx context.Context, id string) (Subscribe, error)
-	Update(ctx context.Context, subscribe Subscribe) (string, error)
-	Delete(ctx context.Context, id string) error
-	SetTelegramID(ctx context.Context, id string, telegramID string) (string, error)
+	Save(ctx context.Context, sub Subscribe) error
 }

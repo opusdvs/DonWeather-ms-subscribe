@@ -1,8 +1,9 @@
 package delivery
 
 import (
+	"context"
 	"encoding/json"
-	"errors"
+	"log"
 	"net/http"
 
 	"github.com/opusdvs/DonWeather-ms-subscribe/internal/domain"
@@ -11,65 +12,43 @@ import (
 
 type SubscribeHandlers struct {
 	subscribeService usecase.SubscribeService
+	ctx              context.Context
 }
 
-func NewSubscribeHandlers(subscribeService usecase.SubscribeService) SubscribeDelivery {
-	return &SubscribeHandlers{subscribeService: subscribeService}
+func NewSubscribeHandlers(subscribeService usecase.SubscribeService, ctx context.Context) SubscribeDelivery {
+	return &SubscribeHandlers{subscribeService: subscribeService, ctx: ctx}
 }
 
-func (h *SubscribeHandlers) CreateSubscribe(w http.ResponseWriter, r *http.Request) {
-	var subscribe domain.Subscribe
-	err := json.NewDecoder(r.Body).Decode(&subscribe)
-	if err != nil {
+func (h *SubscribeHandlers) CreatePendingSubscribe(w http.ResponseWriter, r *http.Request) {
+	var pendingSubscribe domain.PendingSubscribe
+	if err := json.NewDecoder(r.Body).Decode(&pendingSubscribe); err != nil {
+		log.Printf("Failed to decode pending subscribe: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := ValidateSubscribe(subscribe); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	id, err := h.subscribeService.CreateSubscribe(r.Context(), subscribe)
-	if err != nil {
+	ctx := r.Context()
+	if err := h.subscribeService.CreatePendingSubscribe(ctx, pendingSubscribe); err != nil {
+		log.Printf("Failed to create pending subscribe: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(id))
+	w.Write([]byte("Pending subscribe created"))
 }
 
-func (h *SubscribeHandlers) GetAllSubscribes(w http.ResponseWriter, r *http.Request) {
-	h.subscribeService.GetAllSubscribes(r.Context())
-}
-
-func (h *SubscribeHandlers) GetSubscribeById(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	h.subscribeService.GetSubscribeById(r.Context(), id)
-}
-
-func (h *SubscribeHandlers) UpdateSubscribe(w http.ResponseWriter, r *http.Request) {
-	h.subscribeService.UpdateSubscribe(r.Context(), domain.Subscribe{})
-}
-
-func (h *SubscribeHandlers) DeleteSubscribe(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	h.subscribeService.DeleteSubscribe(r.Context(), id)
-}
-
-func (h *SubscribeHandlers) SetTelegramID(w http.ResponseWriter, r *http.Request) {
-	token := r.URL.Query().Get("token")
-	telegramID := r.URL.Query().Get("telegram_id")
-	h.subscribeService.SetTelegramID(r.Context(), token, telegramID)
-}
-
-func ValidateSubscribe(subscribe domain.Subscribe) error {
-	if subscribe.Token == "" {
-		return errors.New("token is required")
+func (h *SubscribeHandlers) CreateSubscribe(w http.ResponseWriter, r *http.Request) {
+	var subscribe domain.Subscribe
+	if err := json.NewDecoder(r.Body).Decode(&subscribe); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Printf("Failed to decode subscribe: %v", err)
+		return
 	}
-	if subscribe.City == "" {
-		return errors.New("city is required")
+	ctx := r.Context()
+	if err := h.subscribeService.CreateSubscribe(ctx, subscribe); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Failed to create subscribe: %v", err)
+		return
 	}
-	if subscribe.Filters == (domain.Filters{}) {
-		return errors.New("filters are required")
-	}
-	return nil
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte("Subscribe created"))
 }

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -20,10 +21,30 @@ import (
 	"github.com/opusdvs/DonWeather-ms-subscribe/internal/delivery/middleware"
 	"github.com/opusdvs/DonWeather-ms-subscribe/internal/repository"
 	"github.com/opusdvs/DonWeather-ms-subscribe/internal/usecase"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
-	pingCtx, pingCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	appCtx, appCancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer appCancel()
+
+	redisTTL := os.Getenv("REDIS_TTL")
+	if redisTTL == "" {
+		log.Fatal("REDIS_TTL environment variable is required")
+	}
+	redisTTLInt, err := strconv.Atoi(redisTTL)
+	if err != nil {
+		log.Fatal("REDIS_TTL environment variable is required")
+	}
+	redisTTLDuration := time.Duration(redisTTLInt) * time.Minute
+	redisHost := os.Getenv("REDIS_HOST")
+	if redisHost == "" {
+		log.Fatal("REDIS_HOST environment variable is required")
+	}
+	redisPort := os.Getenv("REDIS_PORT")
+	if redisPort == "" {
+		log.Fatal("REDIS_PORT environment variable is required")
+	}
 	dbPassword := os.Getenv("DB_PASSWORD")
 	if dbPassword == "" {
 		log.Fatal("DB_PASSWORD environment variable is required")
@@ -50,19 +71,27 @@ func main() {
 		log.Fatal(err)
 	}
 	defer db.Close()
-	defer pingCancel()
-	if err := db.PingContext(pingCtx); err != nil {
-		log.Fatal(err)
+	if err := db.PingContext(appCtx); err != nil {
+		log.Fatal("Failed to connect to the database: %w", err)
 	}
-
-	fmt.Println("Connected to the database")
-
-	subscribeRepository := repository.NewPostgresqlSubscribeRepository(db)
-	subscribeService := usecase.NewSubscribeService(subscribeRepository)
-	subscribeHandlers := delivery.NewSubscribeHandlers(*subscribeService)
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: fmt.Sprintf("%s:%s", redisHost, redisPort),
+		DB:   0,
+	})
+	defer redisClient.Close()
+	if err := redisClient.Ping(appCtx).Err(); err != nil {
+		log.Fatal("Failed to connect to the redis: %w", err)
+	}
+	fmt.Println("Connected to the database and redis")
 	if err := RunMigrations(dsn); err != nil {
 		log.Fatal(err)
 	}
+
+	subscribeRepository := repository.NewPostgresqlSubscribeRepository(db)
+	pendingSubscribeRepository := repository.NewRedisSubscribeRepository(redisClient, redisTTLDuration)
+
+	subscribeService := usecase.NewSubscribeService(subscribeRepository, pendingSubscribeRepository)
+	subscribeHandlers := delivery.NewSubscribeHandlers(*subscribeService, appCtx)
 
 	healthHandler := delivery.NewHealthHandler(db)
 	healthMux := http.NewServeMux()
@@ -70,21 +99,20 @@ func main() {
 	healthMux.HandleFunc("/health/readiness", healthHandler.ReadinessProbe)
 
 	apiMux := http.NewServeMux()
-	apiMux.HandleFunc("/api/v1/subscribe-create", subscribeHandlers.CreateSubscribe)
-	apiMux.HandleFunc("/api/v1/subscribe-get-all", subscribeHandlers.GetAllSubscribes)
-	apiMux.HandleFunc("/api/v1/subscribe-get-by-id", subscribeHandlers.GetSubscribeById)
-	apiMux.HandleFunc("/api/v1/subscribe-update", subscribeHandlers.UpdateSubscribe)
-	apiMux.HandleFunc("/api/v1/subscribe-delete", subscribeHandlers.DeleteSubscribe)
-	apiMux.HandleFunc("/api/v1/set-telegram-id", subscribeHandlers.SetTelegramID)
+	apiMux.HandleFunc("/api/v1/subscribe/create", subscribeHandlers.CreateSubscribe)
+	apiMux.HandleFunc("/api/v1/subscribe/create/pending", subscribeHandlers.CreatePendingSubscribe)
 	handlerMiddleware := middleware.MiddlewareChain(apiMux, middleware.TraceMiddleware, middleware.CorsMiddleware)
 
 	mainMux := http.NewServeMux()
 	mainMux.Handle("/", handlerMiddleware)
-	mainMux.Handle("/health", healthMux)
+	mainMux.Handle("/health/", healthMux)
 
 	server := &http.Server{
-		Addr:    ":8080",
-		Handler: mainMux,
+		Addr:         ":8080",
+		Handler:      mainMux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	go func(s *http.Server) {
@@ -96,16 +124,16 @@ func main() {
 		fmt.Println("Server listen and serve success")
 	}(server)
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	<-c
+	fmt.Println("Server started on port 8080")
+	<-appCtx.Done()
 
+	fmt.Println("Server stopped")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatal(err)
+		log.Fatal("Failed to shutdown server: %w", ctx, err)
 	}
-	fmt.Println("Server stopped")
+	fmt.Println("Server shutdown successfully")
 }
 
 func RunMigrations(dsn string) error {
